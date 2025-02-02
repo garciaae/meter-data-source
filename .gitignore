@@ -9,4 +9,4 @@ Thumbs.db
 # Other local secrets or environment files
 # env.local
 .env
-./include/credentials.h
+include/credentials.h
