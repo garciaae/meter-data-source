@@ -11,7 +11,7 @@ const char* pass = WIFI_PASS;
 char payload[64];
 
 EnergyMonitor energyMonitor;
-float voltajeRed = 220.0;
+float lineVoltage = 220.0;
 
 WiFiClient client;
 
@@ -44,16 +44,16 @@ void loop() {
   double Irms = energyMonitor.calcIrms(1484);
   
   // Calculamos la potencia aparente  
-  double potencia =  Irms * voltajeRed;
+  double power =  Irms * lineVoltage;
   
   // Mostramos la información por el monitor serie
   Serial.print("Potencia= ");
-  Serial.print(potencia);
+  Serial.print(power);
   Serial.print("W        Irms = ");
   Serial.println(Irms);
   
   // Preparamos el payload para enviar
-  sprintf(payload, "{\"watts\":%f, \"station_id\":1}", potencia);
+  sprintf(payload, "{\"watts\":%f, \"station_id\":1}", power);
   
   // Start sending data
   HTTPClient http;
