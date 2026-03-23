@@ -15,47 +15,68 @@ float lineVoltage = 220.0;
 
 WiFiClient client;
 
+// Timeout de conexión WiFi: 30 segundos
+const unsigned long WIFI_TIMEOUT_MS = 30000;
+// Intervalo entre lecturas: 5 segundos
+const unsigned long READ_INTERVAL_MS = 5000;
+// Máximo de fallos HTTP consecutivos antes de reiniciar
+const int MAX_HTTP_FAILURES = 60;
 
-void setup() {
-  Serial.begin(9600);
+int httpFailures = 0;
 
-  Serial.println();
-  Serial.println();
+void connectWiFi() {
   Serial.print("Connecting to ");
   Serial.println(ssid);
-  
-  energyMonitor.current(0, 55.7);
 
-  WiFi.mode(WIFI_STA); // Modo cliente WiFi
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
   WiFi.begin(ssid, pass);
 
-  while (WiFi.status() != WL_CONNECTED) {
+  unsigned long startAttempt = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < WIFI_TIMEOUT_MS) {
     delay(500);
     Serial.print(".");
   }
 
-  Serial.println("");
-  Serial.println("WiFi connected"); 
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP()); // Mostramos la IP
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println();
+    Serial.println("WiFi connected");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println();
+    Serial.println("WiFi connection failed, restarting...");
+    ESP.restart();
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+  Serial.println();
+
+  energyMonitor.current(0, 55.7);
+
+  connectWiFi();
 }
 
 void loop() {
+  // Reconexión WiFi si se pierde
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi lost, reconnecting...");
+    connectWiFi();
+  }
+
   double Irms = energyMonitor.calcIrms(1484);
-  
-  // Calculamos la potencia aparente  
-  double power =  Irms * lineVoltage;
-  
-  // Mostramos la información por el monitor serie
+  double power = Irms * lineVoltage;
+
   Serial.print("Potencia= ");
   Serial.print(power);
   Serial.print("W        Irms = ");
   Serial.println(Irms);
-  
-  // Preparamos el payload para enviar
+
   sprintf(payload, "{\"watts\":%f, \"station_id\":1}", power);
-  
-  // Start sending data
+
   HTTPClient http;
   if (http.begin(client, "http://192.168.1.175")) {
     http.addHeader("Content-Type", "application/json");
@@ -63,12 +84,22 @@ void loop() {
     if (responseCode > 0) {
       String response = http.getString();
       Serial.println(response);
+      httpFailures = 0;
     } else {
       Serial.print("Error on sending POST: ");
       Serial.println(responseCode);
+      httpFailures++;
     }
-    http.writeToStream(&Serial);
     http.end();
+  } else {
+    httpFailures++;
   }
-  delay(5000);
+
+  // Si llevamos muchos fallos seguidos, reiniciamos
+  if (httpFailures >= MAX_HTTP_FAILURES) {
+    Serial.println("Too many HTTP failures, restarting...");
+    ESP.restart();
+  }
+
+  delay(READ_INTERVAL_MS);
 }
