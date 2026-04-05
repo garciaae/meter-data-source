@@ -55,7 +55,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println();
 
-  energyMonitor.current(0, 55.7);
+  energyMonitor.current(0, 20.08);  // ICAL = 2000 (CT ratio) / 99.6 (burden Ω)
 
   connectWiFi();
 }
